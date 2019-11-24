@@ -145,3 +145,11 @@ def plot_categ(train_data, target, nominal_features) :
         # Printing Chart
         plt.show()
         
+        
+def featureEng(numerical_features, categorical_features):
+    numeric_transformer = StandardScaler()
+    categorical_transformer = OneHotEncoder(handle_unknown='ignore')
+    t =  ColumnTransformer([('Scaler', numeric_transformer, numerical_features),('OneHotEncod', categorical_transformer, categorical_features)])
+    preproc = Pipeline(steps=[('preprocessor', t)])
+    #print(t.get_feature_names())
+    return t
