@@ -3,6 +3,11 @@ import pandas as pd
 from sklearn.impute import SimpleImputer
 import seaborn as sns
 import matplotlib.pyplot as plt
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.base import BaseEstimator, TransformerMixin
+
 
 def removeNonAlphanumeric(df) :
     for c in df.columns :
@@ -25,7 +30,7 @@ def handleMissing(df, method = "drop",train = True, imputerDict = {}):
     elif type(method) == int :
         df.fillna(method, inplace= True)
     else :
-        if method != "most frequent":
+        if method != "most_frequent":
             print("For non numeric columns, most frequent strategy is used")
         for c in df.columns :
             if train :
@@ -35,6 +40,36 @@ def handleMissing(df, method = "drop",train = True, imputerDict = {}):
             df[c] = imputerDict[c].transform(df[[c]])
             
     return df,imputerDict
+
+
+class HandleMissingTransformer(BaseEstimator, TransformerMixin):
+    """Custom scaling transformer"""
+    def __init__(self, method):
+        self.method = method
+        self.imputerDict = {}
+        
+
+    def fit(self, df ):
+        if self.method != "drop" and type(self.method) != int :
+            if self.method != "most_frequent":
+                print("For non numeric columns, most frequent strategy is used")
+            for c in df.columns :
+                imp = SimpleImputer(missing_values=np.nan, strategy=self.method if df[c].dtype!="O" else "most_frequent")
+                imp = imp.fit(df[[c]])
+                self.imputerDict[c] = imp 
+        return self
+            
+                
+        
+    def transform(self, df):
+        if self.method == "drop" :
+            df = df.dropna(inplace= True)
+        elif type(self.method) == int :
+            df.fillna(self.method, inplace= True)
+        else :
+            for c in df.columns : 
+                df[c] = self.imputerDict[c].transform(df[[c]])
+        return df  
     
 def target_variable_exploration(df, target, xlabel, ylabel, title) :
     positive_class = df[target].value_counts()[1]
@@ -153,3 +188,9 @@ def featureEng(numerical_features, categorical_features):
     preproc = Pipeline(steps=[('preprocessor', t)])
     #print(t.get_feature_names())
     return t
+
+def getCategFeat(df, n, target):
+    """
+    -- n : min modalities for numerical feat
+    """
+    return [c for c in df.columns if (df[c].dtype == 'O' or df[c].nunique()<n) and c!=target]
