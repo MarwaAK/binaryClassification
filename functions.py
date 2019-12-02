@@ -133,7 +133,7 @@ def plot_numeric(train_data, numeric_features, target) :
         ### Boxplot of Column per Positive / Negative class Value
         sns.boxplot(x=target, y=column, data=train_data, ax=plt.subplot(224));
         # X-axis Label
-        plt.xlabel(str(classes[0])+'  or '+ str(classes[0])+' ?', fontsize=14);
+        plt.xlabel(str(classes[0])+'  or '+ str(classes[1])+' ?', fontsize=14);
         # Y-axis Label
         plt.ylabel(column, fontsize=14);
         # Printing Chart
