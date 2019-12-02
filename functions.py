@@ -7,7 +7,9 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator, TransformerMixin
-
+from functools import partial
+from sklearn.feature_selection import mutual_info_classif, SelectKBest
+from sklearn.ensemble import RandomForestClassifier
 
 def removeNonAlphanumeric(df) :
     for c in df.columns :
@@ -194,3 +196,37 @@ def getCategFeat(df, n, target):
     -- n : min modalities for numerical feat
     """
     return [c for c in df.columns if (df[c].dtype == 'O' or df[c].nunique()<n) and c!=target]
+
+class selectFeaturesTransformer(BaseEstimator, TransformerMixin):
+    """Custom scaling transformer"""
+    def __init__(self, k=10,method='RF',discreteCol=[]):
+        self.k = k
+        self.method = method
+        self.order = []
+        self.discreteCol = discreteCol
+        
+        
+        
+
+    def fit(self, X_train,y_train):
+        if self.method == "Mutual Information" :
+            discrete_mutual_info_classif = partial(mutual_info_classif, 
+                                                   discrete_features=self.discreteCol)
+            featS = SelectKBest(k=self.k, score_func=discrete_mutual_info_classif).fit(X_train,y_train )
+            self.order = np.flip(featS.scores_.argsort())
+            #self.selectedColumns = [columns_eng[i]  for i in self.order[:self.k]]
+            #return X_train[:,order_mi[:self.k]]
+        
+        else :
+            rfModel = RandomForestClassifier(random_state =0).fit(X_train, y_train)
+            order = np.flip(rfModel.feature_importances_.argsort())
+            self.order = np.flip(rfModel.feature_importances_.argsort())
+            #self.selectedColumns = [columns_eng[i]  for i in order_rf[:self.k]]
+            #return X_train[:,order_[:self.k]]
+        return self
+            
+                
+        
+    def transform(self, X_train):
+            return X_train[:,self.order[:self.k]]
+        
