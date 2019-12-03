@@ -10,8 +10,19 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from functools import partial
 from sklearn.feature_selection import mutual_info_classif, SelectKBest
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import GridSearchCV
+from IPython.display import display
+import time
 
 def removeNonAlphanumeric(df) :
+    """ 
+    Remove non-alphanumeric characters from data values
+    Input :
+        df -- dataframe 
+    Output :
+        df -- cleaned dataframe
+    """
     for c in df.columns :
         if df[c].dtype == "O" :
             df[c] = df[c].str.replace('\t', '')
@@ -20,41 +31,44 @@ def removeNonAlphanumeric(df) :
     return df
 
 def toNumeric(df):
+    """" 
+    Convert string column corresponding to numerical values to numerical columns
+    Input : 
+        df -- dataframe 
+    Output :
+        df -- dataframe with converted columns
+    """
     for c in df.columns :
         if df[c].dtype == "O" and all(df[c].str.isnumeric()):
             df[c] = pd.to_numeric(df[c])
     return df
             
-    
-def handleMissing(df, method = "drop",train = True, imputerDict = {}):
-    if method == "drop" :
-        df = df.dropna(inplace= True)
-    elif type(method) == int :
-        df.fillna(method, inplace= True)
-    else :
-        if method != "most_frequent":
-            print("For non numeric columns, most frequent strategy is used")
-        for c in df.columns :
-            if train :
-                imp = SimpleImputer(missing_values=np.nan, strategy=method if df[c].dtype!="O" else "most_frequent")
-                imp = imp.fit(df[[c]])
-                imputerDict[c] = imp 
-            df[c] = imputerDict[c].transform(df[[c]])
-            
-    return df,imputerDict
 
 
 class HandleMissingTransformer(BaseEstimator, TransformerMixin):
-    """Custom scaling transformer"""
-    def __init__(self, method):
+    """Customized transformer to handles missing data"""
+    
+    def __init__(self, method,constant = ''):
+        '''' 
+        Initialise The transformer
+        Inputs :
+            method -- method used to replace or impute missing data (drop/constant/most_frequent/median/mean)
+            constant -- if constant method is selected, the value of the constant must be specified
+        '''
         self.method = method
+        self.constant = constant
         self.imputerDict = {}
         
 
     def fit(self, df ):
-        if self.method != "drop" and type(self.method) != int :
+        '''
+        If impute method is selected i.e self.method not in ['drop', 'constant'], we must fit an imputer
+        Input : 
+            df -- data with missing values
+        '''
+        if self.method not in ['drop', 'constant'] :
             if self.method != "most_frequent":
-                print("For non numeric columns, most frequent strategy is used")
+                print("For non numerical columns, most frequent strategy is used")
             for c in df.columns :
                 imp = SimpleImputer(missing_values=np.nan, strategy=self.method if df[c].dtype!="O" else "most_frequent")
                 imp = imp.fit(df[[c]])
@@ -64,32 +78,44 @@ class HandleMissingTransformer(BaseEstimator, TransformerMixin):
                 
         
     def transform(self, df):
+        """
+        If impute method is selected, impute missing values using imput_dict created in fit function
+        Input : 
+            df -- data with missing values
+        """
         if self.method == "drop" :
             df = df.dropna(inplace= True)
-        elif type(self.method) == int :
-            df.fillna(self.method, inplace= True)
+        elif self.method == 'constant' :
+            df.fillna(self.constant, inplace= True)
         else :
             for c in df.columns : 
                 df[c] = self.imputerDict[c].transform(df[[c]])
         return df  
     
-def target_variable_exploration(df, target, xlabel, ylabel, title) :
-    positive_class = df[target].value_counts()[1]
-    negative_class = df[target].value_counts()[0]
+def target_variable_exploration(df, target, xlabel, ylabel, title, positive=1) :
+    """ 
+    plots the distribution of the classes
+    Input :
+        df -- dataframe containing classes
+        target -- class column
+        xlabel
+        ylabel 
+        title
+        positive -- modality corresponding to positive class
+    """
+    negative =  [c for c in df[target].unique() if c !=positive][0]
+    positive_class = df[target].value_counts()[positive]
+    negative_class = df[target].shape[0] - positive_class
     positive_per = positive_class / df.shape[0] * 100
     negative_per = negative_class / df.shape[0] * 100
-
     plt.figure(figsize=(8, 8))
-
-    sns.countplot(df[target]);
+    sns.countplot(df[target], order=[positive, negative]);
     plt.xlabel(xlabel, size=15, labelpad=15)
     plt.ylabel(ylabel, size=15, labelpad=15)
-    plt.xticks((0, 1), ['Negative class ({0:.2f}%)'.format(negative_per), 'Positive class ({0:.2f}%)'.format(positive_per)])
+    plt.xticks((0, 1), [ 'Positive class ({0:.2f}%)'.format(positive_per), 'Negative class ({0:.2f}%)'.format(negative_per)])
     plt.tick_params(axis='x', labelsize=13)
     plt.tick_params(axis='y', labelsize=13)
-
     plt.title(title, size=15, y=1.05)
-
     plt.show()
     
 
@@ -133,13 +159,13 @@ def plot_numeric(train_data, numeric_features, target) :
         ### Boxplot of Column per Positive / Negative class Value
         sns.boxplot(x=target, y=column, data=train_data, ax=plt.subplot(224));
         # X-axis Label
-        plt.xlabel(str(classes[0])+'  or '+ str(classes[1])+' ?', fontsize=14);
+        plt.xlabel('Positive or Negative ?', fontsize=14);
         # Y-axis Label
         plt.ylabel(column, fontsize=14);
         # Printing Chart
         plt.show()
         
-def plot_categ(train_data, target, nominal_features) :
+def plot_categ(train_data, target, nominal_features,positive =1) :
     # Looping through and Plotting Categorical features
     for column in nominal_features:
     # Figure initiation
@@ -169,19 +195,33 @@ def plot_categ(train_data, target, nominal_features) :
             ax.text(p.get_x()+p.get_width()/2, height[i]*1.01 + 10,
                     '{:1.0%}'.format(height[i]/total[i]), ha="center", size=14) 
 
-        classes = train_data[target].unique()
+        negative = train_data[target].unique()[0] if train_data[target].unique()[0] != positive else train_data[target].unique()[1]
         ### Positive class percentage for every value of feature
-        if train_data[target].dtype == 'O':
-            ### Adding new column with numerical target names
-            train_data[target+str('_id')] = train_data[target].map({classes[0]:0 , classes[1]: 1})
-            sns.pointplot(x=column, y=target+str('_id'), data=train_data, ax = plt.subplot(212));
+        
+        sns.pointplot(x=train_data[column], y=train_data[target].map({negative:0 , positive: 1}), ax = plt.subplot(212));
         # X-axis Label
         plt.xlabel(column, fontsize=14);
         # Y-axis Label
         plt.ylabel(' Positive class percentage', fontsize=14);
         # Printing Chart
         plt.show()
-        
+
+def correlationMap(df, target) :
+    classes = df[target].unique()
+    if data[target].dtype == 'O' :
+        df[target+'_id'] = (df[target]== classes[0]).astype(int) #encode string target 
+    corr = df.corr()
+    fig, ax = plt.subplots(figsize=(12, 9))
+    sns.heatmap(corr, vmax=.8,annot=True, square=True)
+    if data[target].dtype == 'O' :
+        df.drop([target+'_id'], axis=1, inplace=True)
+    # fix for matplotlib bug that cuts off top/bottom of seaborn viz
+    b, t = plt.ylim() # Gets the values for bottom and top
+    b += 0.5 # Add 0.5 to the bottom
+    t -= 0.5 # Subtract 0.5 from the top
+    plt.ylim(b, t) # update the ylim(bottom, top) values
+    plt.show()
+    
         
 def featureEng(numerical_features, categorical_features):
     numeric_transformer = StandardScaler()
@@ -190,6 +230,8 @@ def featureEng(numerical_features, categorical_features):
     preproc = Pipeline(steps=[('preprocessor', t)])
     #print(t.get_feature_names())
     return t
+
+
 
 def getCategFeat(df, n, target):
     """
@@ -230,3 +272,34 @@ class selectFeaturesTransformer(BaseEstimator, TransformerMixin):
     def transform(self, X_train):
             return X_train[:,self.order[:self.k]]
         
+def train(X_train, y_train, classifiers, names,parameters, parameters_featuresSelection, crossVal = True):
+    results = pd.DataFrame()
+    for name, clf in zip(names, classifiers):
+        print('############# ', name, ' #############')
+        start = time.time()
+        #print(params[name])
+        FSelector = selectFeaturesTransformer()
+        pipeline = Pipeline([('FeatureSelection',FSelector),('Classifier',clf)])
+        parameters[name]['FeatureSelection__method'] = parameters_featuresSelection['FeatureSelection__method']
+        parameters[name]['FeatureSelection__k']= parameters_featuresSelection['FeatureSelection__k']
+        if crossVal:
+            classifier = GridSearchCV(pipeline, parameters[name], cv=3)
+        else:
+            classifier = pipeline
+        #print(classifier)
+        classifier.fit(X_train, y_train)
+        # All results
+        means = classifier.cv_results_['mean_test_score']
+        stds = classifier.cv_results_['std_test_score']
+        r = pd.DataFrame(means,columns = ['mean_test_score'])
+        r['std_test_score'] = stds
+        r['params'] = classifier.cv_results_['params']
+        r['classifier'] = name
+        
+        print('Training time (Cross Validation = ',crossVal,') :',(time.time()-start)/len(means))
+        display(r.sort_values(by=['mean_test_score','std_test_score'],ascending =False))
+        results = pd.concat([results, r], ignore_index=True)
+        #for mean, std, params in zip(means, stds, classifier.cv_results_['params']):
+        #print("%0.3f (+/-%0.03f) for %r" % (mean, std * 2, params))
+    results_sorted = results.sort_values(by=['mean_test_score','std_test_score'],ascending =False)
+    return results_sorted
