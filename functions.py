@@ -119,14 +119,21 @@ def target_variable_exploration(df, target, xlabel, ylabel, title, positive=1) :
     plt.show()
     
 
-def plot_numeric(train_data, numeric_features, target) :
+def plot_numeric(data, numeric_features, target) :
+    """ 
+    plots analysing numerical features
+    Inputs : 
+        data -- dataframe containing features to plot
+        numeric_features -- list of numerical features
+        target -- target column name
+     """
     # Looping through and Plotting Numeric features
     for column in numeric_features:    
         # Figure initiation
         fig = plt.figure(figsize=(18,12))
 
         ### Distribution plot
-        sns.distplot(train_data[column], ax=plt.subplot(221));
+        sns.distplot(data[column], ax=plt.subplot(221));
         # X-axis Label
         plt.xlabel(column, fontsize=14);
         # Y-axis Label
@@ -136,11 +143,11 @@ def plot_numeric(train_data, numeric_features, target) :
 
         ### Distribution per Positive / Negative class Value
         # Not Survived hist
-        classes = train_data[target].unique()
-        sns.distplot(train_data.loc[train_data[target]==classes[0], column].dropna(),
+        classes = data[target].unique()
+        sns.distplot(data.loc[data[target]==classes[0], column].dropna(),
                      color='red', label=str(classes[0]), ax=plt.subplot(222));
         # Survived hist
-        sns.distplot(train_data.loc[train_data[target]==classes[1], column].dropna(),
+        sns.distplot(data.loc[data[target]==classes[1], column].dropna(),
                      color='blue', label=str(classes[1]), ax=plt.subplot(222));
         # Adding Legend
         plt.legend(loc='best')
@@ -150,14 +157,14 @@ def plot_numeric(train_data, numeric_features, target) :
         plt.ylabel('Density per '+ str(classes[0])+' / '+str(classes[1]), fontsize=14);
 
         ### Average Column value per positive / Negative Value
-        sns.barplot(x=target, y=column, data=train_data, ax=plt.subplot(223));
+        sns.barplot(x=target, y=column, data=data, ax=plt.subplot(223));
         # X-axis Label
         plt.xlabel('Positive or Negative?', fontsize=14);
         # Y-axis Label
         plt.ylabel('Average ' + column, fontsize=14);
 
         ### Boxplot of Column per Positive / Negative class Value
-        sns.boxplot(x=target, y=column, data=train_data, ax=plt.subplot(224));
+        sns.boxplot(x=target, y=column, data=data, ax=plt.subplot(224));
         # X-axis Label
         plt.xlabel('Positive or Negative ?', fontsize=14);
         # Y-axis Label
@@ -166,6 +173,13 @@ def plot_numeric(train_data, numeric_features, target) :
         plt.show()
         
 def plot_categ(train_data, target, nominal_features,positive =1) :
+    """ 
+    plots analysing nominal categorical features
+    Inputs : 
+        data -- dataframe containing features to plot
+        nominal_features -- list of nominal features
+        target -- target column name
+     """
     # Looping through and Plotting Categorical features
     for column in nominal_features:
     # Figure initiation
@@ -207,6 +221,12 @@ def plot_categ(train_data, target, nominal_features,positive =1) :
         plt.show()
 
 def correlationMap(df, target) :
+    """ 
+    Correlation Heatmap
+    Inputs : 
+        df -- dataframe containing features to plot
+        target -- target column name
+     """
     classes = df[target].unique()
     if data[target].dtype == 'O' :
         df[target+'_id'] = (df[target]== classes[0]).astype(int) #encode string target 
@@ -224,24 +244,42 @@ def correlationMap(df, target) :
     
         
 def featureEng(numerical_features, categorical_features):
+    """ 
+    create pipeline for feature preprocessing 
+    Inputs : 
+        numerical_features -- list of numerical features
+        categorical_features -- list of categorical features
+    Outputs :
+        preproc -- pipeline with feature preprocessing steps
+     """
     numeric_transformer = StandardScaler()
     categorical_transformer = OneHotEncoder(handle_unknown='ignore')
     t =  ColumnTransformer([('Scaler', numeric_transformer, numerical_features),('OneHotEncod', categorical_transformer, categorical_features)])
     preproc = Pipeline(steps=[('preprocessor', t)])
-    #print(t.get_feature_names())
-    return t
+    return preproc
 
 
 
 def getCategFeat(df, n, target):
     """
-    -- n : min modalities for numerical feat
+    get dataframe's categorical features 
+    Inputs :
+        df     -- dataframe  
+        n      -- min modalities for numerical features
+        target -- target column name
     """
     return [c for c in df.columns if (df[c].dtype == 'O' or df[c].nunique()<n) and c!=target]
 
 class selectFeaturesTransformer(BaseEstimator, TransformerMixin):
     """Custom scaling transformer"""
     def __init__(self, k=10,method='RF',discreteCol=[]):
+        """ 
+        initialize transformer
+        Inputs : 
+            k -- number of features to keep
+            method -- method to use, either 'Mutual Information or RF
+            discreteCol -- if Mutual Information is used, specify indexes of discrete columns
+        """
         self.k = k
         self.method = method
         self.order = []
@@ -251,6 +289,14 @@ class selectFeaturesTransformer(BaseEstimator, TransformerMixin):
         
 
     def fit(self, X_train,y_train):
+        """
+        Fit the transformer on data
+        Input :
+            X_train -- features array
+            Y_train -- labels array
+        Output :
+            fitted transformer
+        """
         if self.method == "Mutual Information" :
             discrete_mutual_info_classif = partial(mutual_info_classif, 
                                                    discrete_features=self.discreteCol)
@@ -270,9 +316,27 @@ class selectFeaturesTransformer(BaseEstimator, TransformerMixin):
                 
         
     def transform(self, X_train):
+        """
+        apply fitted transformer to select features
+        Input :
+            X_train -- features array
+        Output :
+            array containing only selected features
+        """
             return X_train[:,self.order[:self.k]]
         
 def train(X_train, y_train, classifiers, names,parameters, parameters_featuresSelection, crossVal = True):
+    """ 
+    training process
+    Inputs : 
+        X_train -- features array
+        Y_train -- labels array
+        classifiers -- list of classifiers to test
+        names -- list of classifiers names
+        parameters -- tuning parameters corresponding for classifiers
+        parameters_featuresSelection -- parameters for fearures selection
+        crossVal -- whether to use cross validation or not
+     """
     results = pd.DataFrame()
     for name, clf in zip(names, classifiers):
         print('############# ', name, ' #############')
